@@ -1,0 +1,11 @@
+{
+  "dependencies": {
+    "cheerio": "^1.0.0-rc.12"
+  },
+  "name": "sym",
+  "version": "0.0.1",
+  "main": "app.js",
+  "repository": "https://github.com/micahco/sym",
+  "author": "micahco <micahcowell@gmail.com>",
+  "license": "BSD 2-Clause \"Simplified\" License"
+}
