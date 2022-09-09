@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as readline from 'readline';
 import { launch } from 'puppeteer';
 
 interface CatalogLine {
@@ -22,24 +24,33 @@ interface Rating {
 }
 
 class App {
-	private catalog: CatalogData[];
 	private pageIndexLimiter: number;
+	private catalog: CatalogData[];
 	private urls: string[];
 
 	constructor(pageIndexLimiter: number) {
-		this.catalog = [];
 		this.pageIndexLimiter = pageIndexLimiter;
-		this.urls = [
-			'https://rateyourmusic.com/release/unauth/hank-williams-iii/boot-2/',
-			'https://rateyourmusic.com/release/unauth/hank-williams-iii/boot-3/'
-		];
+		this.catalog = [];
+		this.urls = [];
 	}
 
 	public async run(): Promise<void> {
+		await this.read();
 		for (const url of this.urls) {
 			await this.scrape(url);
 		}
 		this.parse()
+	}
+
+	private async read() {
+		const fileStream = fs.createReadStream('urls.txt');
+		const rl = readline.createInterface({
+			input: fileStream,
+			crlfDelay: Infinity
+		});
+		for await (const line of rl) {
+			this.urls.push(line)
+		}
 	}
 
 	private async scrape(url: string): Promise<void> {
@@ -93,7 +104,6 @@ class App {
 	
 		// close puppeteer
 		await browser.close();
-	
 		this.catalog.push({ release, catalogLines });
 	}
 
@@ -119,5 +129,9 @@ class App {
 	}
 }
 
-let app = new App(10);
-app.run();
+(async () => {
+	console.time('run')
+	let app = new App(10);
+	await app.run();
+	console.timeEnd('run')
+})();
