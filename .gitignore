@@ -1,4 +1,7 @@
-*.js
+# USER
+app.js
+data.json
+headfull.sh
 
 # Logs
 logs
