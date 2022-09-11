@@ -1,13 +1,14 @@
-import * as fs from 'fs';
-import * as readline from 'readline';
+import fs from 'fs';
+import readline from 'readline';
 import { stdout } from 'process';
+import { setTimeout } from "timers/promises";
+import fetch from 'cross-fetch';
 import { launch, Page } from 'puppeteer';
 import { PuppeteerBlocker } from '@cliqz/adblocker-puppeteer';
-import fetch from 'cross-fetch';
 
 interface Config {
 	pageLimit: number;
-	matchCount: number;
+	sameUserRatings: number;
 }
 
 interface CatalogLine {
@@ -41,7 +42,7 @@ class App {
 		// launch puppeteer
 		const browser = await launch({
 			headless: true,
-			timeout: 0
+			args: ['--disable-gpu', '--no-sandbox', '--lang=en-US', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
 		});
 		const page = await browser.newPage();
 
@@ -87,10 +88,12 @@ class App {
 	private async getCatalogData(page: Page, url: string): Promise<CatalogData> {
 
 		// open url;	
-		await page.goto(url, { waitUntil: "domcontentloaded" });
+		await page.goto(url, {
+			waitUntil: 'load', 
+			timeout: 90000
+		});
 
 		// scrape release information
-		const id = await page.$eval('input.album_shortcut', (el: any) => el.value.replace(/[^0-9]/g, ''));
 		const title = await page.$eval('div.album_title', (el: any) => el.innerText);
 		const artist = await page.$eval('a.artist', (el: any) => el.innerText);
 		console.log(`scraping: ${artist} - ${title}`);
@@ -118,22 +121,28 @@ class App {
 			// check if next page exists
 			if (await page.$('a.navlinknext') == null) {
 				break;
-			}		
+			}
 
 			// go to next page
-			const nextPage = '/' + (pageIndex + 1);
-			await page.evaluate((id, nextPage)=> {
-				RYMmediaPage.navCatalog('l', id, true, 'ratings', nextPage);
-			}, id, nextPage)
+			await page.evaluate(() => {
+				const sel = '#catalog_list > span > a.navlinknext';
+				const btn = document.querySelector(sel) as HTMLElement;
+				btn.click();
+			});
 	
 			// wait for page to change
 			const sel = '#catalog_list > span > span.navlinkcurrent';
 			await page.waitForFunction((cur, sel) => {
 				return document.querySelector(sel)?.textContent != cur
 			}, {
-				timeout: 0,
+				timeout: 5000,
 				polling: 'mutation'
-			}, pageIndex.toString(), sel);
+			}, pageIndex.toString(), sel)
+				.catch(() => {
+					// timeout bug
+					console.log(`error: not responding [${pageIndex}]`);
+					pageIndex = Infinity;
+				});
 
 			pageIndex++;
 		}
@@ -171,7 +180,7 @@ class App {
 
 	private filterDataToArray(data: Map<string, Rating[]>): [string, Rating[]][] {
 		return Array.from(data).filter(([user, ratings]) => {
-			return ratings.length > this.cfg.matchCount;
+			return ratings.length >= this.cfg.sameUserRatings;
 		})
 	}
 }
@@ -179,8 +188,8 @@ class App {
 (async () => {
 	console.time('total')
 	const app = new App({
-		pageLimit: 20,
-		matchCount: 1
+		pageLimit: 200,
+		sameUserRatings: 2
 	});
 	await app.run();
 	console.timeEnd('total');
